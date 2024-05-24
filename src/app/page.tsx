@@ -1,52 +1,39 @@
-import { useAuth } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useUser, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import Link from "next/link";
+// import FolderManager from "../components/FolderManager";
 
-export default function Home() {
-	const { isLoaded, userId } = useAuth();
-	const [files, setFiles] = useState([]);
-
-	useEffect(() => {
-		if (userId) {
-			fetchFiles();
-		}
-	}, [userId]);
-
-	const fetchFiles = async () => {
-		const response = await axios.get("/api/files");
-		setFiles(response.data);
-	};
-
-	const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-		const formData = new FormData();
-		formData.append("file", e.target.files[0]);
-		formData.append("userId", userId);
-
-		await axios.post("/api/files/upload", formData);
-		fetchFiles();
-	};
-
-	const deleteFile = async (id: string) => {
-		await axios.delete(`/api/files/${id}`);
-		fetchFiles();
-	};
-
-	if (!isLoaded) {
-		return <div>Loading...</div>;
-	}
+const HomePage = () => {
+	// const { user } = useUser();
 
 	return (
-		<div>
-			<h1>Welcome, {userId}</h1>
-			<input type="file" onChange={uploadFile} />
-			<ul>
-				{files.map((file) => (
-					<li key={file._id}>
-						<a href={file.url}>{file.filename}</a>
-						<button onClick={() => deleteFile(file._id)}>Delete</button>
-					</li>
-				))}
-			</ul>
+		<div
+			style={{
+				display: "flex",
+				flexDirection: "column",
+				alignItems: "center",
+				height: "100vh",
+				justifyContent: "center"
+			}}
+		>
+			<SignedIn>
+				<div>
+					{/* <p>Welcome, {user?.firstName}!</p> */}
+					<UserButton />
+					{/* <FolderManager /> */}
+				</div>
+			</SignedIn>
+			<SignedOut>
+				<div>
+					<Link href="/sign-in">
+						<a>Sign In</a>
+					</Link>
+					<Link href="/sign-up">
+						<a>Sign Up</a>
+					</Link>
+				</div>
+			</SignedOut>
 		</div>
 	);
-}
+};
+
+export default HomePage;
