@@ -20,8 +20,8 @@
 		"paths": {
 			"@/*": ["./src/*"]
 		},
-		"types": ["jest", "node"]
+		"types": ["vitest/jsdom", "vitest/globals"]
 	},
-	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "jest.config.mjs"],
+	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
 	"exclude": ["node_modules"]
 }

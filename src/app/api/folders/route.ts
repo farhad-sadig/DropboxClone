@@ -1,50 +1,40 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/utils/dbConnect";
-import { getAuth } from "@clerk/nextjs/server";
+import prisma from "@/utils/prisma";
+import { auth } from "@clerk/nextjs/server";
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
-	const { userId } = getAuth(req);
+	const { userId } = auth();
 
 	if (!userId) {
 		return res.status(401).json({ error: "Unauthorized" });
 	}
 
-	if (req.method === "POST") {
-		const { name, parentFolder } = req.body;
+	const { name, parentFolder } = req.body;
 
-		try {
-			const newFolder = await prisma.folder.create({
-				data: {
-					userId,
-					name,
-					parentFolderId: parentFolder || null
-				}
+	try {
+		// Check if the parent folder exists, if specified
+		if (parentFolder) {
+			const parent = await prisma.folder.findUnique({
+				where: { id: parentFolder }
 			});
 
-			if (parentFolder) {
-				const parent = await prisma.folder.findUnique({
-					where: { id: parentFolder }
-				});
-
-				if (!parent) {
-					return res.status(404).json({ error: "Parent folder not found" });
-				}
-
-				await prisma.folder.update({
-					where: { id: parentFolder },
-					data: {
-						subFolders: {
-							connect: { id: newFolder.id }
-						}
-					}
-				});
+			if (!parent) {
+				return res.status(404).json({ error: "Parent folder not found" });
 			}
-
-			res.status(201).json(newFolder);
-		} catch (error) {
-			res.status(500).json({ error: "Internal server error" });
 		}
-	} else {
-		res.status(405).json({ error: "Method not allowed" });
+
+		// Create new folder
+		const newFolder = await prisma.folder.create({
+			data: {
+				userId,
+				name,
+				parentFolderId: parentFolder || null
+			}
+		});
+
+		res.status(201).json(newFolder);
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ error: "Internal server error" });
 	}
 }
