@@ -32,7 +32,11 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 			}
 		});
 
-		res.status(201).json(newFolder);
+		res.status(201).json({
+			name: newFolder.name,
+			userId: newFolder.userId,
+			parentFolderId: newFolder.parentFolderId
+		});
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ error: "Internal server error" });
