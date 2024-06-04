@@ -1,17 +1,29 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/utils/prisma";
+import prisma from "@/libs/prisma";
 import { auth } from "@clerk/nextjs/server";
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
-	const { userId } = auth();
+	const { userId: clerkId } = auth();
 
-	if (!userId) {
+	if (!clerkId) {
 		return res.status(401).json({ error: "Unauthorized" });
 	}
 
 	const { name, parentFolder } = req.body;
 
+	if (!name) {
+		return res.status(400).json({ error: "Folder name is required" });
+	}
 	try {
+		// Ensure the user exists
+		const user = await prisma.user.findUnique({
+			where: { clerkId }
+		});
+
+		if (!user) {
+			return res.status(404).json({ error: "User not found" });
+		}
+
 		// Check if the parent folder exists, if specified
 		if (parentFolder) {
 			const parent = await prisma.folder.findUnique({
@@ -26,16 +38,18 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 		// Create new folder
 		const newFolder = await prisma.folder.create({
 			data: {
-				userId,
+				userId: user.id,
 				name,
 				parentFolderId: parentFolder || null
 			}
 		});
 
 		res.status(201).json({
+			id: newFolder.id,
 			name: newFolder.name,
 			userId: newFolder.userId,
-			parentFolderId: newFolder.parentFolderId
+			parentFolderId: newFolder.parentFolderId,
+			createdAt: newFolder.createdAt
 		});
 	} catch (error) {
 		console.error(error);
