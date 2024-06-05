@@ -36,50 +36,50 @@ describe("Folder API Handlers", () => {
 	};
 
 	// Common tests for all methods
-	// for (const methodKey in handlers) {
-	// 	if (Object.prototype.hasOwnProperty.call(handlers, methodKey)) {
-	// 		const method = methodKey as RequestMethod;
-	// 		const handler = handlers[method];
+	for (const methodKey in handlers) {
+		if (Object.prototype.hasOwnProperty.call(handlers, methodKey)) {
+			const method = methodKey as RequestMethod;
+			const handler = handlers[method];
 
-	// 		describe(`${method} /api/folders - common scenarios`, () => {
-	// 			test(`should return 401 if the user is not authenticated (${method})`, async () => {
-	// 				(auth as Mock).mockReturnValue({ userId: null });
+			describe(`${method} /api/folders - common scenarios`, () => {
+				test(`should return 401 if the user is not authenticated (${method})`, async () => {
+					(auth as Mock).mockReturnValue({ userId: null });
 
-	// 				const { req, res } = createMocks({
-	// 					method,
-	// 					body: { folderId: "folder-123" }
-	// 				});
+					const { req, res } = createMocks({
+						method,
+						body: { folderId: "folder-123" }
+					});
 
-	// 				await handler(
-	// 					req as unknown as NextApiRequest,
-	// 					res as unknown as NextApiResponse
-	// 				);
+					await handler(
+						req as unknown as NextApiRequest,
+						res as unknown as NextApiResponse
+					);
 
-	// 				expect(unauthorizedResponse).toHaveBeenCalledWith(res);
-	// 			});
+					expect(unauthorizedResponse).toHaveBeenCalledWith(res);
+				});
 
-	// 			test(`should return 500 if there is a server error (${method})`, async () => {
-	// 				(auth as Mock).mockReturnValue({ userId: "clerk-123" });
+				test(`should return 500 if there is a server error (${method})`, async () => {
+					(auth as Mock).mockReturnValue({ userId: "clerk-123" });
 
-	// 				const { req, res } = createMocks({
-	// 					method,
-	// 					body: { folderId: "folder-123" }
-	// 				});
+					const { req, res } = createMocks({
+						method,
+						body: { name: "Test Folder", folderId: "folder-123" }
+					});
 
-	// 				const error = new Error("Internal server error");
+					const error = new Error("Internal server error");
 
-	// 				(validateRequest as Mock).mockRejectedValue(error);
+					(validateRequest as Mock).mockRejectedValue(error);
 
-	// 				await handler(
-	// 					req as unknown as NextApiRequest,
-	// 					res as unknown as NextApiResponse
-	// 				);
+					await handler(
+						req as unknown as NextApiRequest,
+						res as unknown as NextApiResponse
+					);
 
-	// 				expect(internalServerErrorResponse).toHaveBeenCalledWith(error, res);
-	// 			});
-	// 		});
-	// 	}
-	// }
+					expect(internalServerErrorResponse).toHaveBeenCalledWith(error, res);
+				});
+			});
+		}
+	}
 
 	// Tests for validateRequest scenarios
 	describe("validateRequest - specific scenarios", () => {
@@ -292,7 +292,7 @@ describe("Folder API Handlers", () => {
 			expect(res.statusCode).toBe(200);
 			expect(res._getJSONData()).toEqual({
 				...updatedFolder,
-				createdAt: expect.any(String) 
+				createdAt: expect.any(String)
 			});
 		});
 	});

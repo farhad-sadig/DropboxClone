@@ -1,11 +1,7 @@
 import { NextApiResponse } from "next";
 import prisma from "@/libs/prisma";
 
-export async function validateRequest(
-	clerkId: string,
-	folderId: string,
-	res: NextApiResponse
-) {
+export async function validateRequest(clerkId: string, folderId: string) {
 	const validation = await validateUserAndFolder(clerkId, folderId);
 	if (validation.error) {
 		return {

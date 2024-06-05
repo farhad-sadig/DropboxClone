@@ -21,8 +21,12 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 	}
 
 	try {
-		const validation = await validateRequest(clerkId, parentFolder, res);
-		if (!validation) return;
+		const validation = await validateRequest(clerkId, parentFolder as string);
+		if (validation.error) {
+			return res
+				.status(validation.statusCode)
+				.json({ error: validation.error });
+		}
 
 		const newFolder = await prisma.folder.create({
 			data: {
@@ -54,7 +58,7 @@ export async function GET(req: NextApiRequest, res: NextApiResponse) {
 	const { folderId } = req.query;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId as string, res);
+		const validation = await validateRequest(clerkId, folderId as string);
 		if (validation.error) {
 			return res
 				.status(validation.statusCode)
@@ -77,8 +81,12 @@ export async function PUT(req: NextApiRequest, res: NextApiResponse) {
 	const { folderId, name, parentFolder } = req.body;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId, res);
-		if (!validation) return;
+		const validation = await validateRequest(clerkId, folderId as string);
+		if (validation.error) {
+			return res
+				.status(validation.statusCode)
+				.json({ error: validation.error });
+		}
 
 		const updatedFolder = await prisma.folder.update({
 			where: { id: folderId },
@@ -104,8 +112,12 @@ export async function DELETE(req: NextApiRequest, res: NextApiResponse) {
 	const { folderId } = req.body;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId, res);
-		if (!validation) return;
+		const validation = await validateRequest(clerkId, folderId as string);
+		if (validation.error) {
+			return res
+				.status(validation.statusCode)
+				.json({ error: validation.error });
+		}
 
 		await prisma.folder.delete({
 			where: { id: folderId }
