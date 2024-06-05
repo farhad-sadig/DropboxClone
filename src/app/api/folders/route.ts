@@ -1,12 +1,17 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/libs/prisma";
 import { auth } from "@clerk/nextjs/server";
+import {
+	validateRequest,
+	unauthorizedResponse,
+	internalServerErrorResponse
+} from "@/libs/helpers";
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
 	const { userId: clerkId } = auth();
 
 	if (!clerkId) {
-		return res.status(401).json({ error: "Unauthorized" });
+		return unauthorizedResponse(res);
 	}
 
 	const { name, parentFolder } = req.body;
@@ -14,31 +19,14 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 	if (!name) {
 		return res.status(400).json({ error: "Folder name is required" });
 	}
+
 	try {
-		// Ensure the user exists
-		const user = await prisma.user.findUnique({
-			where: { clerkId }
-		});
+		const validation = await validateRequest(clerkId, parentFolder, res);
+		if (!validation) return;
 
-		if (!user) {
-			return res.status(404).json({ error: "User not found" });
-		}
-
-		// Check if the parent folder exists, if specified
-		if (parentFolder) {
-			const parent = await prisma.folder.findUnique({
-				where: { id: parentFolder }
-			});
-
-			if (!parent) {
-				return res.status(404).json({ error: "Parent folder not found" });
-			}
-		}
-
-		// Create new folder
 		const newFolder = await prisma.folder.create({
 			data: {
-				userId: user.id,
+				userId: validation.user!.id,
 				name,
 				parentFolderId: parentFolder || null
 			}
@@ -52,7 +40,79 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 			createdAt: newFolder.createdAt
 		});
 	} catch (error) {
-		console.error(error);
-		res.status(500).json({ error: "Internal server error" });
+		internalServerErrorResponse(error, res);
+	}
+}
+
+export async function GET(req: NextApiRequest, res: NextApiResponse) {
+	const { userId: clerkId } = auth();
+
+	if (!clerkId) {
+		return unauthorizedResponse(res);
+	}
+
+	const { folderId } = req.query;
+
+	try {
+		const validation = await validateRequest(clerkId, folderId as string, res);
+		if (validation.error) {
+			return res
+				.status(validation.statusCode)
+				.json({ error: validation.error });
+		}
+
+		res.status(200).json(validation.folder);
+	} catch (error) {
+		internalServerErrorResponse(error, res);
+	}
+}
+
+export async function PUT(req: NextApiRequest, res: NextApiResponse) {
+	const { userId: clerkId } = auth();
+
+	if (!clerkId) {
+		return unauthorizedResponse(res);
+	}
+
+	const { folderId, name, parentFolder } = req.body;
+
+	try {
+		const validation = await validateRequest(clerkId, folderId, res);
+		if (!validation) return;
+
+		const updatedFolder = await prisma.folder.update({
+			where: { id: folderId },
+			data: {
+				name,
+				parentFolderId: parentFolder || null
+			}
+		});
+
+		res.status(200).json(updatedFolder);
+	} catch (error) {
+		internalServerErrorResponse(error, res);
+	}
+}
+
+export async function DELETE(req: NextApiRequest, res: NextApiResponse) {
+	const { userId: clerkId } = auth();
+
+	if (!clerkId) {
+		return unauthorizedResponse(res);
+	}
+
+	const { folderId } = req.body;
+
+	try {
+		const validation = await validateRequest(clerkId, folderId, res);
+		if (!validation) return;
+
+		await prisma.folder.delete({
+			where: { id: folderId }
+		});
+
+		res.status(200).json({ message: "Folder deleted successfully" });
+	} catch (error) {
+		internalServerErrorResponse(error, res);
 	}
 }
