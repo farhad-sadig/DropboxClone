@@ -21,7 +21,7 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 	}
 
 	try {
-		const validation = await validateRequest(clerkId, parentFolder as string);
+		const validation = await validateRequest(clerkId, parentFolder);
 		if (validation.error) {
 			return res
 				.status(validation.statusCode)
@@ -55,10 +55,10 @@ export async function GET(req: NextApiRequest, res: NextApiResponse) {
 		return unauthorizedResponse(res);
 	}
 
-	const { folderId } = req.query;
+	const folderId  = req.query.folderId as string;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId as string);
+		const validation = await validateRequest(clerkId, folderId);
 		if (validation.error) {
 			return res
 				.status(validation.statusCode)
@@ -81,7 +81,7 @@ export async function PUT(req: NextApiRequest, res: NextApiResponse) {
 	const { folderId, name, parentFolder } = req.body;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId as string);
+		const validation = await validateRequest(clerkId, folderId);
 		if (validation.error) {
 			return res
 				.status(validation.statusCode)
@@ -112,7 +112,7 @@ export async function DELETE(req: NextApiRequest, res: NextApiResponse) {
 	const { folderId } = req.body;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId as string);
+		const validation = await validateRequest(clerkId, folderId);
 		if (validation.error) {
 			return res
 				.status(validation.statusCode)
