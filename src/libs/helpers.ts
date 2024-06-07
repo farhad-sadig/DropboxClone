@@ -60,3 +60,11 @@ export async function validateUserAndFolder(clerkId: string, folderId: string) {
 
 	return { error: null, user, folder: folderValidation.folder };
 }
+
+export async function resetDb() {
+	await prisma.$transaction([
+		prisma.user.deleteMany(),
+		prisma.folder.deleteMany(),
+		prisma.file.deleteMany()
+	]);
+}

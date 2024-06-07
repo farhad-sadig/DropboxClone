@@ -6,7 +6,9 @@ export default defineConfig({
 	plugins: [react()],
 	test: {
 		globals: true,
-		environment: "node"
+		environment: "node",
+		include: ["src/app/api/**/*.test.ts"],
+		exclude: ["src/app/api/**/*.integration.test.ts"]
 	},
 	resolve: {
 		alias: [{ find: "@", replacement: resolve(__dirname, "./src") }]
