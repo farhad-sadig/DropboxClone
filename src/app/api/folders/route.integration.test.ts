@@ -1,194 +1,98 @@
-import { describe, test, expect, beforeEach, vi, Mock } from "vitest";
-import { createMocks } from "node-mocks-http";
-import type { NextApiRequest, NextApiResponse } from "next";
-import { auth } from "@clerk/nextjs/server";
-import {
-	validateRequest,
-	unauthorizedResponse,
-	internalServerErrorResponse
-} from "@/libs/helpers";
-import { POST, GET, PUT, DELETE } from "@/app/api/folders/route";
+import { describe, test, expect, beforeEach, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
+import { POST, GET, PUT, DELETE } from "./route";
+import { mockRequest, mockResponse } from "@/utils/test-utils";
+import jwt, { JwtPayload } from "jsonwebtoken";
 import prisma from "@/libs/__mocks__/prisma";
+import { validateRequest } from "@/libs/helpers";
 
-vi.mock("@clerk/nextjs/server");
+// Mock necessary modules
 vi.mock("@/libs/prisma");
 vi.mock("@/libs/helpers");
+
+const JWT_SECRET = process.env.JWT_SECRET || "test_secret";
+
+const mockUser = {
+	id: "user-123",
+	email: "test@example.com",
+	password: "hashedpassword",
+	createdAt: new Date()
+};
+
+const mockFolder = {
+	id: "existing-folder",
+	name: "Existing Folder",
+	userId: "user-123",
+	parentFolderId: null,
+	createdAt: new Date().toISOString()
+};
 
 describe("Folder API Handlers", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
 
-	enum RequestMethod {
-		POST = "POST",
-		GET = "GET",
-		PUT = "PUT",
-		DELETE = "DELETE"
-	}
-	const handlers: Record<
-		RequestMethod,
-		(req: NextApiRequest, res: NextApiResponse) => Promise<void>
-	> = {
-		[RequestMethod.POST]: POST,
-		[RequestMethod.GET]: GET,
-		[RequestMethod.PUT]: PUT,
-		[RequestMethod.DELETE]: DELETE
-	};
-
-	// Common tests for all methods
-	for (const methodKey in handlers) {
-		if (Object.prototype.hasOwnProperty.call(handlers, methodKey)) {
-			const method = methodKey as RequestMethod;
-			const handler = handlers[method];
-
-			describe(`${method} /api/folders - common scenarios`, () => {
-				test(`should return 401 if the user is not authenticated (${method})`, async () => {
-					(auth as Mock).mockReturnValue({ userId: null });
-
-					const { req, res } = createMocks({
-						method,
-						body: { folderId: "folder-123" }
-					});
-
-					await handler(
-						req as unknown as NextApiRequest,
-						res as unknown as NextApiResponse
-					);
-
-					expect(unauthorizedResponse).toHaveBeenCalledWith(res);
-				});
-
-				test(`should return 500 if there is a server error (${method})`, async () => {
-					(auth as Mock).mockReturnValue({ userId: "clerk-123" });
-
-					const { req, res } = createMocks({
-						method,
-						body: { name: "Test Folder", folderId: "folder-123" }
-					});
-
-					const error = new Error("Internal server error");
-
-					(validateRequest as Mock).mockRejectedValue(error);
-
-					await handler(
-						req as unknown as NextApiRequest,
-						res as unknown as NextApiResponse
-					);
-
-					expect(internalServerErrorResponse).toHaveBeenCalledWith(error, res);
-				});
+	describe("POST /api/folders", () => {
+		test("should return 400 if the request body is null", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest("http://localhost/api/folders", "POST", null, {
+				authorization: `Bearer ${token}`
 			});
-		}
-	}
+			const res = mockResponse();
+			const mockPayload: JwtPayload = { userId: "user-123" };
+			vi.spyOn(jwt, "verify").mockImplementation(() => mockPayload);
+			prisma.user.findUnique.mockResolvedValue(mockUser);
 
-	// Tests for validateRequest scenarios
-	describe("validateRequest - specific scenarios", () => {
-		test("should return 404 if user is not found", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
+			const result = await POST(req, res);
 
-			(validateRequest as Mock).mockResolvedValue({
-				error: "User not found",
-				statusCode: 404,
-				user: null,
-				folder: null
-			});
-
-			const { req, res } = createMocks({
-				method: "GET",
-				query: { folderId: "folder-123" }
-			});
-
-			await GET(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
-			);
-
-			expect(res.statusCode).toBe(404);
-			expect(res._getJSONData()).toEqual({ error: "User not found" });
+			expect(result.status).toBe(400);
+			const json = await result.json();
+			expect(json.error).toBe("Folder name is required");
 		});
 
-		test("should return 404 if folder is not found", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
-
-			(validateRequest as Mock).mockResolvedValue({
-				error: "Folder not found",
-				statusCode: 404,
-				user: { id: "user-123" },
-				folder: null
-			});
-
-			const { req, res } = createMocks({
-				method: "GET",
-				query: { folderId: "folder-123" }
-			});
-
-			await GET(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
-			);
-
-			expect(res.statusCode).toBe(404);
-			expect(res._getJSONData()).toEqual({ error: "Folder not found" });
-		});
-		test("should return 404 if folder does not belong to the user", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
-
-			(validateRequest as Mock).mockResolvedValue({
-				error: "Folder does not belong to the user",
-				statusCode: 404,
-				user: { id: "user-123" },
-				folder: null
-			});
-
-			const { req, res } = createMocks({
-				method: "GET",
-				query: { folderId: "folder-123" }
-			});
-
-			await GET(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
-			);
-
-			expect(res.statusCode).toBe(404);
-			expect(res._getJSONData()).toEqual({
-				error: "Folder does not belong to the user"
-			});
-		});
-	});
-
-	describe("POST /api/folders - specific scenarios", () => {
 		test("should return 400 if folder name is missing", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
-
-			const { req, res } = createMocks({
-				method: "POST",
-				body: { parentFolder: null }
-			});
-
-			await POST(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders",
+				"POST",
+				{ parentFolder: null },
+				{
+					authorization: `Bearer ${token}`
+				}
 			);
+			const res = mockResponse();
+			const mockPayload: JwtPayload = { userId: "user-123" };
+			vi.spyOn(jwt, "verify").mockImplementation(() => mockPayload);
+			prisma.user.findUnique.mockResolvedValue(mockUser);
 
-			expect(res.statusCode).toBe(400);
-			expect(res._getJSONData()).toEqual({ error: "Folder name is required" });
+			const result = await POST(req, res);
+
+			expect(result.status).toBe(400);
+			const json = await result.json();
+			expect(json.error).toBe("Folder name is required");
 		});
 
 		test("should create a new folder if valid data is provided", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders",
+				"POST",
+				{ name: "Test Folder", parentFolder: null },
+				{
+					authorization: `Bearer ${token}`
+				}
+			);
+			const res = mockResponse();
+			const mockPayload: JwtPayload = { userId: "user-123" };
+			vi.spyOn(jwt, "verify").mockImplementation(() => mockPayload);
+			prisma.user.findUnique.mockResolvedValue(mockUser);
 
-			const validationMock = {
-				user: { id: "user-123" },
-				folder: null,
-				error: null
-			};
-
-			(validateRequest as Mock).mockResolvedValue(validationMock);
-
-			const { req, res } = createMocks({
-				method: "POST",
-				body: { name: "Test Folder", parentFolder: null }
+			// Mock the validateRequest function to always return a successful validation
+			vi.mocked(validateRequest).mockResolvedValue({
+				error: null,
+				statusCode: 200,
+				user: mockUser,
+				folder: null
 			});
 
 			const newFolder = {
@@ -199,138 +103,256 @@ describe("Folder API Handlers", () => {
 				createdAt: new Date().toISOString()
 			};
 
-			(prisma.folder.create as Mock).mockResolvedValue(newFolder);
+			prisma.folder.create.mockResolvedValue(newFolder);
 
-			await POST(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
-			);
+			const result = await POST(req, res);
 
-			expect(res.statusCode).toBe(201);
-			expect(res._getJSONData()).toEqual({
-				...newFolder,
-				createdAt: expect.any(String)
-			});
+			expect(result.status).toBe(201);
+			const json = await result.json();
+			expect(json.name).toBe("Test Folder");
 		});
 	});
 
-	describe("GET /api/folders - specific scenarios", () => {
-		test("should return folder details if valid data is provided", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
+	describe("GET /api/folders", () => {
+		test("should return 401 if the user is not authenticated", async () => {
+			const req = mockRequest("http://localhost/api/folders", "GET");
+			const res = mockResponse();
 
-			const validationMock = {
-				user: { id: "user-123" },
-				folder: {
-					id: "folder-123",
-					name: "Test Folder",
-					userId: "user-123",
-					parentFolderId: null,
-					createdAt: new Date().toISOString()
-				},
-				error: null
-			};
+			const result = await GET(req, res);
 
-			(validateRequest as Mock).mockResolvedValue(validationMock);
+			expect(result.status).toBe(401);
+			const json = await result.json();
+			expect(json.message).toBe("No token provided");
+		});
 
-			const { req, res } = createMocks({
-				method: "GET",
-				query: { folderId: "folder-123" }
+		test("should return 401 if the token is invalid", async () => {
+			const req = mockRequest("http://localhost/api/folders", "GET", null, {
+				authorization: "Bearer invalidtoken"
+			});
+			const res = mockResponse();
+
+			vi.spyOn(jwt, "verify").mockImplementation(() => {
+				throw new jwt.JsonWebTokenError("Invalid token");
 			});
 
-			await GET(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
+			const result = await GET(req, res);
+
+			expect(result.status).toBe(401);
+			const json = await result.json();
+			expect(json.message).toBe("Invalid token");
+		});
+
+		test("should return 404 if the folder is not found", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders?folderId=nonexistent-folder",
+				"GET",
+				null,
+				{
+					authorization: `Bearer ${token}`
+				}
 			);
 
-			expect(res.statusCode).toBe(200);
-			expect(res._getJSONData()).toEqual({
-				...validationMock.folder,
-				createdAt: expect.any(String)
-			});
+			prisma.user.findUnique.mockResolvedValue(mockUser);
+			prisma.folder.findUnique.mockResolvedValue(null);
+
+			const res = mockResponse();
+			const mockPayload: JwtPayload = { userId: "user-123" };
+			vi.spyOn(jwt, "verify").mockImplementation(() => mockPayload);
+
+			const result = await GET(req, res);
+
+			expect(result.status).toBe(404);
+			const json = await result.json();
+			expect(json.error).toBe("Folder not found");
+		});
+
+		test("should return the folder details if the folder is found", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders?folderId=existing-folder",
+				"GET",
+				null,
+				{
+					authorization: `Bearer ${token}`
+				}
+			);
+
+			prisma.user.findUnique.mockResolvedValue(mockUser);
+			prisma.folder.findUnique.mockResolvedValue(mockFolder);
+
+			const res = mockResponse();
+
+			const result = await GET(req, res);
+
+			expect(result.status).toBe(200);
+			const json = await result.json();
+			expect(json.name).toBe("Existing Folder");
 		});
 	});
 
-	describe("PUT /api/folders - specific scenarios", () => {
-		test("should update folder details if valid data is provided", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
+	describe("PUT /api/folders", () => {
+		test("should return 401 if the user is not authenticated", async () => {
+			const req = mockRequest("http://localhost/api/folders", "PUT");
+			const res = mockResponse();
 
-			const validationMock = {
-				user: { id: "user-123" },
-				folder: {
-					id: "folder-123",
-					name: "Test Folder",
-					userId: "user-123",
-					parentFolderId: null,
-					createdAt: new Date().toISOString()
-				},
-				error: null
-			};
+			const result = await PUT(req, res);
 
-			(validateRequest as Mock).mockResolvedValue(validationMock);
+			expect(result.status).toBe(401);
+			const json = await result.json();
+			expect(json.message).toBe("No token provided");
+		});
 
-			const { req, res } = createMocks({
-				method: "PUT",
-				body: {
-					folderId: "folder-123",
+		test("should return 401 if the token is invalid", async () => {
+			const req = mockRequest("http://localhost/api/folders", "PUT", null, {
+				authorization: "Bearer invalidtoken"
+			});
+			const res = mockResponse();
+
+			vi.spyOn(jwt, "verify").mockImplementation(() => {
+				throw new jwt.JsonWebTokenError("Invalid token");
+			});
+
+			const result = await PUT(req, res);
+
+			expect(result.status).toBe(401);
+			const json = await result.json();
+			expect(json.message).toBe("Invalid token");
+		});
+
+		test("should return 404 if the folder is not found", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders",
+				"PUT",
+				{
+					folderId: "nonexistent-folder",
 					name: "Updated Folder",
 					parentFolder: null
+				},
+				{
+					authorization: `Bearer ${token}`
 				}
-			});
+			);
+			const res = mockResponse();
+
+			prisma.user.findUnique.mockResolvedValue(mockUser);
+			prisma.folder.findUnique.mockResolvedValue(null);
+
+			const result = await PUT(req, res);
+
+			expect(result.status).toBe(404);
+			const json = await result.json();
+			expect(json.error).toBe("Folder not found");
+		});
+
+		test("should update the folder details if valid data is provided", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders",
+				"PUT",
+				{
+					folderId: "existing-folder",
+					name: "Updated Folder",
+					parentFolder: null
+				},
+				{
+					authorization: `Bearer ${token}`
+				}
+			);
+			const res = mockResponse();
+
+			prisma.user.findUnique.mockResolvedValue(mockUser);
+			prisma.folder.findUnique.mockResolvedValue(mockFolder);
 
 			const updatedFolder = {
-				...validationMock.folder,
+				...mockFolder,
 				name: "Updated Folder"
 			};
 
-			(prisma.folder.update as Mock).mockResolvedValue(updatedFolder);
+			prisma.folder.update.mockResolvedValue(updatedFolder);
 
-			await PUT(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
-			);
+			const result = await PUT(req, res);
 
-			expect(res.statusCode).toBe(200);
-			expect(res._getJSONData()).toEqual({
-				...updatedFolder,
-				createdAt: expect.any(String)
-			});
+			expect(result.status).toBe(200);
+			const json = await result.json();
+			expect(json.name).toBe("Updated Folder");
 		});
 	});
 
-	describe("DELETE /api/folders - specific scenarios", () => {
-		test("should delete the folder if valid data is provided", async () => {
-			(auth as Mock).mockReturnValue({ userId: "clerk-123" });
+	describe("DELETE /api/folders", () => {
+		test("should return 401 if the user is not authenticated", async () => {
+			const req = mockRequest("http://localhost/api/folders", "DELETE");
+			const res = mockResponse();
 
-			const validationMock = {
-				user: { id: "user-123" },
-				folder: {
-					id: "folder-123",
-					name: "Test Folder",
-					userId: "user-123",
-					parentFolderId: null,
-					createdAt: new Date().toISOString()
-				},
-				error: null
-			};
+			const result = await DELETE(req, res);
 
-			(validateRequest as Mock).mockResolvedValue(validationMock);
+			expect(result.status).toBe(401);
+			const json = await result.json();
+			expect(json.message).toBe("No token provided");
+		});
 
-			const { req, res } = createMocks({
-				method: "DELETE",
-				body: { folderId: "folder-123" }
+		test("should return 401 if the token is invalid", async () => {
+			const req = mockRequest("http://localhost/api/folders", "DELETE", null, {
+				authorization: "Bearer invalidtoken"
+			});
+			const res = mockResponse();
+
+			vi.spyOn(jwt, "verify").mockImplementation(() => {
+				throw new jwt.JsonWebTokenError("Invalid token");
 			});
 
-			(prisma.folder.delete as Mock).mockResolvedValue(validationMock.folder);
+			const result = await DELETE(req, res);
 
-			await DELETE(
-				req as unknown as NextApiRequest,
-				res as unknown as NextApiResponse
+			expect(result.status).toBe(401);
+			const json = await result.json();
+			expect(json.message).toBe("Invalid token");
+		});
+
+		test("should return 404 if the folder is not found", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders",
+				"DELETE",
+				{ folderId: "nonexistent-folder" },
+				{
+					authorization: `Bearer ${token}`
+				}
 			);
+			const res = mockResponse();
 
-			expect(res.statusCode).toBe(200);
-			expect(res._getJSONData()).toEqual({
-				message: "Folder deleted successfully"
-			});
+			prisma.user.findUnique.mockResolvedValue(mockUser);
+			prisma.folder.findUnique.mockResolvedValue(null);
+
+			const result = await DELETE(req, res);
+
+			expect(result.status).toBe(404);
+			const json = await result.json();
+			expect(json.error).toBe("Folder not found");
+		});
+
+		test("should delete the folder if valid data is provided", async () => {
+			const token = jwt.sign({ userId: mockUser.id }, JWT_SECRET);
+			const req = mockRequest(
+				"http://localhost/api/folders",
+				"DELETE",
+				{ folderId: "existing-folder" },
+				{
+					authorization: `Bearer ${token}`
+				}
+			);
+			const res = mockResponse();
+
+			prisma.user.findUnique.mockResolvedValue(mockUser);
+			prisma.folder.findUnique.mockResolvedValue(mockFolder);
+
+			prisma.folder.delete.mockResolvedValue(mockFolder);
+
+			const result = await DELETE(req, res);
+
+			expect(result.status).toBe(200);
+			const json = await result.json();
+			expect(json.message).toBe("Folder deleted successfully");
 		});
 	});
 });

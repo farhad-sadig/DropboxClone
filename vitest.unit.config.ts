@@ -7,8 +7,8 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: "node",
-		include: ["src/app/api/**/*.test.ts"],
-		exclude: ["src/app/api/**/*.integration.test.ts"]
+		include: ["src/**/*.test.ts"],
+		exclude: ["src/**/*.integration.test.ts"]
 	},
 	resolve: {
 		alias: [{ find: "@", replacement: resolve(__dirname, "./src") }]

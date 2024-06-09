@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/libs/prisma";
-import { auth } from "@clerk/nextjs/server";
+import authMiddleware from "@/middleware";
 import { uploadFile, deleteFile } from "@/utils/s3";
 import {
 	validateRequest,

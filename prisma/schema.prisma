@@ -9,10 +9,11 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
+  id        String   @id @default(uuid())
   email     String   @unique
+  password  String
   createdAt DateTime @default(now())
+
   files     File[]
   folders   Folder[]
 }
@@ -25,8 +26,11 @@ model File {
   url       String
   createdAt DateTime @default(now())
 
-  user   User   @relation(fields: [userId], references: [id])
-  folder Folder? @relation(fields: [folderId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([folderId])
 }
 
 model Folder {
@@ -36,8 +40,11 @@ model Folder {
   parentFolderId String?
   createdAt      DateTime @default(now())
 
-  user         User     @relation(fields: [userId], references: [id])
-  parentFolder Folder?  @relation("SubFolders", fields: [parentFolderId], references: [id])
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentFolder Folder?  @relation("SubFolders", fields: [parentFolderId], references: [id], onDelete: SetNull)
   subFolders   Folder[] @relation("SubFolders")
   files        File[]
+
+  @@index([userId])
+  @@index([parentFolderId])
 }

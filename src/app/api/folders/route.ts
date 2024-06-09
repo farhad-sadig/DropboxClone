@@ -1,31 +1,30 @@
-import { NextApiRequest, NextApiResponse } from "next";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/libs/prisma";
-import { auth } from "@clerk/nextjs/server";
-import {
-	validateRequest,
-	unauthorizedResponse,
-	internalServerErrorResponse
-} from "@/libs/helpers";
+import authMiddleware from "@/middleware/authMiddleware";
+import { validateRequest, internalServerErrorResponse } from "@/libs/helpers";
 
-export async function POST(req: NextApiRequest, res: NextApiResponse) {
-	const { userId: clerkId } = auth();
+const postHandler = async (req: NextRequest) => {
+	
+	
+	
+	const user = req.user!;
 
-	if (!clerkId) {
-		return unauthorizedResponse(res);
-	}
-
-	const { name, parentFolder } = req.body;
+	const { name, parentFolder } = await req.json();
 
 	if (!name) {
-		return res.status(400).json({ error: "Folder name is required" });
+		return NextResponse.json(
+			{ error: "Folder name is required" },
+			{ status: 400 }
+		);
 	}
 
 	try {
-		const validation = await validateRequest(clerkId, parentFolder);
+		const validation = await validateRequest(user.id, parentFolder);
 		if (validation.error) {
-			return res
-				.status(validation.statusCode)
-				.json({ error: validation.error });
+			return NextResponse.json(
+				{ error: validation.error },
+				{ status: validation.statusCode }
+			);
 		}
 
 		const newFolder = await prisma.folder.create({
@@ -36,56 +35,53 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 			}
 		});
 
-		res.status(201).json({
-			id: newFolder.id,
-			name: newFolder.name,
-			userId: newFolder.userId,
-			parentFolderId: newFolder.parentFolderId,
-			createdAt: newFolder.createdAt
-		});
+		return NextResponse.json(
+			{
+				id: newFolder.id,
+				name: newFolder.name,
+				userId: newFolder.userId,
+				parentFolderId: newFolder.parentFolderId,
+				createdAt: newFolder.createdAt
+			},
+			{ status: 201 }
+		);
 	} catch (error) {
-		internalServerErrorResponse(error, res);
+		return internalServerErrorResponse(error);
 	}
-}
+};
 
-export async function GET(req: NextApiRequest, res: NextApiResponse) {
-	const { userId: clerkId } = auth();
+const getHandler = async (req: NextRequest) => {
+	const user = req.user!;
 
-	if (!clerkId) {
-		return unauthorizedResponse(res);
-	}
-
-	const folderId  = req.query.folderId as string;
+	const folderId = req.nextUrl.searchParams.get("folderId") as string;
 
 	try {
-		const validation = await validateRequest(clerkId, folderId);
+		const validation = await validateRequest(user.id, folderId);
 		if (validation.error) {
-			return res
-				.status(validation.statusCode)
-				.json({ error: validation.error });
+			return NextResponse.json(
+				{ error: validation.error },
+				{ status: validation.statusCode }
+			);
 		}
 
-		res.status(200).json(validation.folder);
+		return NextResponse.json(validation.folder, { status: 200 });
 	} catch (error) {
-		internalServerErrorResponse(error, res);
+		return internalServerErrorResponse(error);
 	}
-}
+};
 
-export async function PUT(req: NextApiRequest, res: NextApiResponse) {
-	const { userId: clerkId } = auth();
+const putHandler = async (req: NextRequest) => {
+	const user = req.user!;
 
-	if (!clerkId) {
-		return unauthorizedResponse(res);
-	}
-
-	const { folderId, name, parentFolder } = req.body;
+	const { folderId, name, parentFolder } = await req.json();
 
 	try {
-		const validation = await validateRequest(clerkId, folderId);
+		const validation = await validateRequest(user.id, folderId);
 		if (validation.error) {
-			return res
-				.status(validation.statusCode)
-				.json({ error: validation.error });
+			return NextResponse.json(
+				{ error: validation.error },
+				{ status: validation.statusCode }
+			);
 		}
 
 		const updatedFolder = await prisma.folder.update({
@@ -96,35 +92,40 @@ export async function PUT(req: NextApiRequest, res: NextApiResponse) {
 			}
 		});
 
-		res.status(200).json(updatedFolder);
+		return NextResponse.json(updatedFolder, { status: 200 });
 	} catch (error) {
-		internalServerErrorResponse(error, res);
+		return internalServerErrorResponse(error);
 	}
-}
+};
 
-export async function DELETE(req: NextApiRequest, res: NextApiResponse) {
-	const { userId: clerkId } = auth();
+const deleteHandler = async (req: NextRequest) => {
+	const user = req.user!;
 
-	if (!clerkId) {
-		return unauthorizedResponse(res);
-	}
-
-	const { folderId } = req.body;
+	const { folderId } = await req.json();
 
 	try {
-		const validation = await validateRequest(clerkId, folderId);
+		const validation = await validateRequest(user.id, folderId);
 		if (validation.error) {
-			return res
-				.status(validation.statusCode)
-				.json({ error: validation.error });
+			return NextResponse.json(
+				{ error: validation.error },
+				{ status: validation.statusCode }
+			);
 		}
 
 		await prisma.folder.delete({
 			where: { id: folderId }
 		});
 
-		res.status(200).json({ message: "Folder deleted successfully" });
+		return NextResponse.json(
+			{ message: "Folder deleted successfully" },
+			{ status: 200 }
+		);
 	} catch (error) {
-		internalServerErrorResponse(error, res);
+		return internalServerErrorResponse(error);
 	}
-}
+};
+
+export const POST = authMiddleware(postHandler);
+export const GET = authMiddleware(getHandler);
+export const PUT = authMiddleware(putHandler);
+export const DELETE = authMiddleware(deleteHandler);

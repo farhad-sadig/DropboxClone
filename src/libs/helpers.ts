@@ -1,8 +1,8 @@
-import { NextApiResponse } from "next";
+import {  NextResponse } from "next/server";
 import prisma from "@/libs/prisma";
 
-export async function validateRequest(clerkId: string, folderId: string) {
-	const validation = await validateUserAndFolder(clerkId, folderId);
+export async function validateRequest(userId: string, folderId: string) {
+	const validation = await validateUserAndFolder(userId, folderId);
 	if (validation.error) {
 		return {
 			error: validation.error,
@@ -14,18 +14,18 @@ export async function validateRequest(clerkId: string, folderId: string) {
 	return { statusCode: 200, ...validation };
 }
 
-export function unauthorizedResponse(res: NextApiResponse) {
-	res.status(401).json({ error: "Unauthorized" });
+export function unauthorizedResponse() {
+	return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
-export function internalServerErrorResponse(error: any, res: NextApiResponse) {
+export function internalServerErrorResponse(error: any) {
 	console.error(error);
-	res.status(500).json({ error: "Internal server error" });
+	return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }
 
-async function validateUser(clerkId: string) {
+async function validateUser(userId: string) {
 	const user = await prisma.user.findUnique({
-		where: { clerkId }
+		where: { id: userId }
 	});
 	if (!user) {
 		return { error: "User not found", user: null };
@@ -46,8 +46,8 @@ async function validateFolder(userId: string, folderId: string) {
 	return { error: null, folder };
 }
 
-export async function validateUserAndFolder(clerkId: string, folderId: string) {
-	const userValidation = await validateUser(clerkId);
+export async function validateUserAndFolder(userId: string, folderId: string) {
+	const userValidation = await validateUser(userId);
 	if (userValidation.error) {
 		return { error: userValidation.error, user: null, folder: null };
 	}
